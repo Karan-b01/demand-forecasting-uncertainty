@@ -58,10 +58,6 @@ sell_prices.csv
 
 The preparation pipeline reads these three files. Files such as `sales_train_validation.csv` and submission templates may be included in the Kaggle download, but are not needed by this implementation. See [data/README.md](data/README.md) for the data instructions. Raw Kaggle data, processed data, and trained model artifacts are excluded from Git. A clean checkout therefore needs the Kaggle files and a pipeline run before the dashboard can load forecasts.
 
-### What belongs in the GitHub repository
-
-Commit source code, the React/FastAPI application, tests, notebooks, dependency manifests and lockfiles, documentation, and compact aggregate reports or charts. Do not commit original Kaggle files, full-size derived CSV/parquet files, trained model binaries, virtual environments, Python caches, browser profiles, `.env` files, API keys, passwords, cloud credentials, private SSH keys/certificates, or personal information. `.gitignore` excludes these local files; `data/README.md` is the only tracked file intended inside `data/`. Review `git status --short` before committing. If a secret was committed previously, removing it from the latest commit is not enough: revoke/rotate it and remove it from repository history.
-
 ## Reproduce the results
 
 With the M5 files in `data/raw/`, run the full pipeline from the repository root. The commands below use the project environment directly, so activation is optional:
