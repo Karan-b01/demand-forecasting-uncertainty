@@ -1,0 +1,86 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 820 360" role="img" aria-labelledby="title description">
+  <title id="title">Shopkeeper loading tomorrow's stock</title>
+  <desc id="description">A shopkeeper carries cartons toward a delivery truck and wonders how much will sell tomorrow.</desc>
+  <style>
+    .far-layer { animation: drift 8s ease-in-out infinite alternate; }
+    .worker { transform-box: fill-box; transform-origin: center bottom; animation: lift 1.5s ease-in-out infinite; }
+    .moving-box { animation: load-box 3.4s ease-in-out infinite; }
+    .wheel { transform-box: fill-box; transform-origin: center; animation: spin 3.4s linear infinite; }
+    .thought { animation: think 2s ease-in-out infinite; }
+    @keyframes drift { from { transform: translateX(0); } to { transform: translateX(4px); } }
+    @keyframes lift { 0%, 100% { transform: translateY(0) rotate(0); } 45% { transform: translateY(-4px) rotate(-2deg); } }
+    @keyframes load-box {
+      0%, 12% { transform: translate(0, 0); opacity: 1; }
+      60% { transform: translate(166px, -18px); opacity: 1; }
+      72%, 100% { transform: translate(166px, -18px); opacity: 0; }
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @keyframes think { 0%, 100% { opacity: .9; } 50% { opacity: 1; } }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; }
+    }
+  </style>
+  <rect width="820" height="360" rx="18" fill="#eef0e8"/>
+  <path d="M0 0h500v266H0z" fill="#e3ebe4"/>
+  <path d="M0 266h820v94H0z" fill="#c8d0c8"/>
+  <g class="far-layer" opacity=".65">
+    <path d="M20 250V56h205v194" fill="#f8f3e9" stroke="#52636a" stroke-width="5"/>
+    <path d="M20 119h205M20 185h205" stroke="#52636a" stroke-width="5"/>
+    <g stroke="#52636a" stroke-width="3">
+      <rect x="37" y="76" width="34" height="37" rx="5" fill="#dca36e"/>
+      <rect x="80" y="66" width="36" height="47" rx="5" fill="#7ca99a"/>
+      <rect x="125" y="81" width="34" height="32" rx="5" fill="#d58570"/>
+      <rect x="169" y="70" width="37" height="43" rx="5" fill="#dfc36e"/>
+      <rect x="38" y="139" width="46" height="41" rx="5" fill="#91a8c0"/>
+      <rect x="95" y="132" width="35" height="48" rx="5" fill="#dfc36e"/>
+      <rect x="141" y="143" width="63" height="37" rx="5" fill="#7ca99a"/>
+      <rect x="40" y="203" width="58" height="41" rx="5" fill="#dca36e"/>
+      <rect x="109" y="195" width="39" height="49" rx="5" fill="#d58570"/>
+      <rect x="159" y="204" width="46" height="40" rx="5" fill="#91a8c0"/>
+    </g>
+  </g>
+  <g opacity=".35" stroke="#89968e" stroke-width="2">
+    <path d="M40 360 255 266M170 360 330 266M320 360 405 266M470 360 480 266M620 360 560 266M780 360 650 266"/>
+  </g>
+  <ellipse cx="530" cy="293" rx="247" ry="17" fill="#56645c" opacity=".18"/>
+  <g class="thought">
+    <path d="M246 38q0-20 22-20h243q23 0 23 22v42q0 22-23 22H367l-26 21 5-21h-78q-22 0-22-22z" fill="#fffdf7" stroke="#435760" stroke-width="4"/>
+    <text x="390" y="55" text-anchor="middle" font-family="Arial, sans-serif" font-size="19" font-weight="700" fill="#344b55">How much will I sell</text>
+    <text x="390" y="81" text-anchor="middle" font-family="Arial, sans-serif" font-size="19" font-weight="700" fill="#344b55">tomorrow?</text>
+    <circle cx="326" cy="128" r="7" fill="#fffdf7" stroke="#435760" stroke-width="3"/>
+    <circle cx="315" cy="142" r="4" fill="#fffdf7" stroke="#435760" stroke-width="2"/>
+  </g>
+  <g>
+    <path d="M493 154h189v113H493z" fill="#477c88" stroke="#344b55" stroke-width="5"/>
+    <path d="M682 188h74l39 43v36H682z" fill="#d99059" stroke="#344b55" stroke-width="5" stroke-linejoin="round"/>
+    <path d="M720 196h31l25 28h-56z" fill="#dce9e5" stroke="#344b55" stroke-width="4"/>
+    <path d="M494 267h301" stroke="#344b55" stroke-width="7"/>
+    <rect x="507" y="167" width="76" height="42" rx="3" fill="#d9aa72" stroke="#344b55" stroke-width="3"/>
+    <path d="M507 180h76m-38-13v13m-38 0 38 29 38-29" fill="none" stroke="#344b55" stroke-width="3"/>
+    <rect x="591" y="167" width="75" height="42" rx="3" fill="#c88f61" stroke="#344b55" stroke-width="3"/>
+    <path d="M591 180h75m-37-13v13m-38 0 38 29 37-29" fill="none" stroke="#344b55" stroke-width="3"/>
+    <circle class="wheel" cx="552" cy="274" r="27" fill="#344b55"/>
+    <circle cx="552" cy="274" r="11" fill="#e8e8df"/>
+    <circle class="wheel" cx="733" cy="274" r="27" fill="#344b55"/>
+    <circle cx="733" cy="274" r="11" fill="#e8e8df"/>
+    <path d="M760 247h22" stroke="#fff2d1" stroke-width="5" stroke-linecap="round"/>
+  </g>
+  <ellipse cx="370" cy="293" rx="66" ry="12" fill="#56645c" opacity=".2"/>
+  <g class="worker" stroke="#344b55" stroke-width="4" stroke-linejoin="round">
+    <path d="M341 198q0-42 30-42t30 42v51h-60z" fill="#d77f50"/>
+    <circle cx="371" cy="139" r="29" fill="#edc39b"/>
+    <path d="M343 137q0-34 29-34 31 0 31 34l-9-13-39 1z" fill="#435760"/>
+    <circle cx="361" cy="141" r="3.5" fill="#344b55" stroke="none"/>
+    <circle cx="381" cy="141" r="3.5" fill="#344b55" stroke="none"/>
+    <path d="M364 154q8 7 16 0" fill="none" stroke-width="3"/>
+    <path d="M345 188q-23-6-35 15l28 15m32-19q24-3 43 18l-24 12-23-12" fill="#d77f50"/>
+    <path d="M349 247h23l-5 38h-21zM376 247h22l10 38h-22z" fill="#526b83"/>
+    <path d="M344 283h24l-3 10h-30q0-7 9-10zm39 0h23l11 10h-31z" fill="#435760"/>
+  </g>
+  <g class="moving-box" stroke="#344b55" stroke-width="3" stroke-linejoin="round">
+    <path d="M405 177h49v42h-49z" fill="#d9aa72"/>
+    <path d="M405 188h49m-25-11v11m-24 0 24 31 25-31" fill="none"/>
+    <path d="M414 177v-9h31v9" fill="#ead0a8"/>
+  </g>
+  <text x="410" y="338" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" fill="#435760">Stocking up for tomorrow</text>
+</svg>

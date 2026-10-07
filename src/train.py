@@ -3,7 +3,7 @@ import joblib
 import lightgbm as lgb
 import numpy as np
 import pandas as pd
-from sklearn.metrics import mean_absolute_error, root_mean_squared_error
+from sklearn.metrics import mean_absolute_error, mean_squared_error
 
 
 def prepare_data_splits(features_csv: str = "data/processed/features.csv"):
@@ -19,17 +19,17 @@ def prepare_data_splits(features_csv: str = "data/processed/features.csv"):
       "date",
       "id",
       "d",
-      "state_id",
       "sales",
-      "store",
-      "item",
-      "dept_id",
-      "cat_id",
+      "sell_price",
   ]
   feature_cols = [c for c in df.columns if c not in ignore_cols]
 
   # Ensure categorical columns are properly typed for LightGBM
-  for col in ["event_name_1", "event_type_1"]:
+  categorical_cols = [
+      "store", "item", "state_id", "dept_id", "cat_id",
+      "event_name_1", "event_type_1", "event_name_2", "event_type_2",
+  ]
+  for col in categorical_cols:
     if col in feature_cols:
       df[col] = df[col].astype("category")
 
@@ -41,6 +41,31 @@ def prepare_data_splits(features_csv: str = "data/processed/features.csv"):
   train_mask = df["date"] < val_start
   val_mask = (df["date"] >= val_start) & (df["date"] < test_start)
   test_mask = df["date"] >= test_start
+
+  # Build volume tiers only from training-period targets. The resulting tier
+  # is known for a series before validation/test and can safely stratify CQR.
+  series_keys = ["store", "item"]
+  series_volume = (
+      df.loc[train_mask].groupby(series_keys, observed=True)[target_col]
+      .mean()
+      .rename("historical_mean_sales")
+      .reset_index()
+  )
+  series_volume["volume_rank"] = series_volume["historical_mean_sales"].rank(
+      method="first", pct=True
+  )
+  series_volume["volume_tier"] = pd.cut(
+      series_volume["volume_rank"],
+      bins=[0.0, 1 / 3, 2 / 3, 1.0],
+      labels=["Low", "Medium", "High"],
+      include_lowest=True,
+  ).astype(str)
+  df = df.merge(
+      series_volume[series_keys + ["historical_mean_sales", "volume_tier"]],
+      on=series_keys,
+      how="left",
+      validate="many_to_one",
+  )
 
   print(
       f"Train span:      {df.loc[train_mask, 'date'].min().date()} to"
@@ -62,15 +87,25 @@ def prepare_data_splits(features_csv: str = "data/processed/features.csv"):
       "y_val": df.loc[val_mask, target_col],
       "X_test": df.loc[test_mask, feature_cols],
       "y_test": df.loc[test_mask, target_col],
-      "meta_val": df.loc[val_mask, ["date", "store", "item", "sales"]],
-      "meta_test": df.loc[test_mask, ["date", "store", "item", "sales"]],
+      "meta_train": df.loc[
+          train_mask,
+          ["date", "store", "item", "sales", "historical_mean_sales", "volume_tier"],
+      ],
+      "meta_val": df.loc[
+          val_mask,
+          ["date", "store", "item", "sales", "historical_mean_sales", "volume_tier"],
+      ],
+      "meta_test": df.loc[
+          test_mask,
+          ["date", "store", "item", "sales", "historical_mean_sales", "volume_tier"],
+      ],
       "feature_cols": feature_cols,
   }
   return splits
 
 
 def train_models(splits: dict):
-  """Trains Point model (RMSE) and Quantile models (0.1, 0.5, 0.9)."""
+  """Trains point and quantile models, including upper-tail inventory levels."""
   X_train, y_train = splits["X_train"], splits["y_train"]
   X_val, y_val = splits["X_val"], splits["y_val"]
   X_test, y_test = splits["X_test"], splits["y_test"]
@@ -100,7 +135,7 @@ def train_models(splits: dict):
   test_preds["point"] = point_model.predict(X_test)
 
   # 2. Quantile models: 0.1, 0.5, 0.9
-  quantiles = [0.1, 0.5, 0.9]
+  quantiles = [0.1, 0.5, 0.75, 0.9, 0.95, 0.99]
   for q in quantiles:
     print(f"--- Training Quantile Model (alpha={q}) ---")
     q_model = lgb.LGBMRegressor(
@@ -122,20 +157,62 @@ def train_models(splits: dict):
     val_preds[f"q_{q}"] = q_model.predict(X_val)
     test_preds[f"q_{q}"] = q_model.predict(X_test)
 
+  # A pooled P10 model can collapse toward zero for a high-volume series when
+  # its training target mixes intermittent and high-volume products. Compare
+  # it with a lagged empirical lower-tail feature on validation, then keep the
+  # blend weight that minimizes validation pinball loss for each history tier.
+  val_meta = splits["meta_val"]
+  test_meta = splits["meta_test"]
+  raw_val_p10 = val_preds["q_0.1"].copy()
+  raw_test_p10 = test_preds["q_0.1"].copy()
+  val_p10 = raw_val_p10.copy()
+  test_p10 = raw_test_p10.copy()
+  blend_weights = {}
+  q = 0.10
+  for tier in ["Low", "Medium", "High"]:
+    val_mask = val_meta["volume_tier"].eq(tier).to_numpy()
+    test_mask = test_meta["volume_tier"].eq(tier).to_numpy()
+    if not val_mask.any() or not test_mask.any():
+      continue
+    local_val = X_val.loc[val_mask, "rolling_q10_56"].to_numpy(float)
+    local_test = X_test.loc[test_mask, "rolling_q10_56"].to_numpy(float)
+    y_tier = y_val.loc[val_mask].to_numpy(float)
+    candidate_losses = {}
+    for local_weight in [0.0, 0.25, 0.5, 0.75, 1.0]:
+      candidate = (1.0 - local_weight) * raw_val_p10[val_mask] + local_weight * local_val
+      error = y_tier - candidate
+      candidate_losses[local_weight] = float(
+          np.maximum(q * error, (q - 1.0) * error).mean()
+      )
+    weight = min(candidate_losses, key=candidate_losses.get)
+    blend_weights[tier] = weight
+    val_p10[val_mask] = (
+        (1.0 - weight) * raw_val_p10[val_mask] + weight * local_val
+    )
+    test_p10[test_mask] = (
+        (1.0 - weight) * raw_test_p10[test_mask] + weight * local_test
+    )
+  val_preds["q_0.1"] = val_p10
+  test_preds["q_0.1"] = test_p10
+  val_preds["q10_model_raw"] = raw_val_p10
+  test_preds["q10_model_raw"] = raw_test_p10
+  models["p10_validation_blend_weights"] = blend_weights
+
   return models, val_preds, test_preds
 
 
 def enforce_monotonicity(
     preds_dict: dict, prefix: str = ""
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-  """Enforces non-crossing constraint: q10 <= q50 <= q90 and non-negativity."""
-  q10 = np.maximum(0.0, preds_dict["q_0.1"])
-  q50 = np.maximum(0.0, preds_dict["q_0.5"])
-  q90 = np.maximum(0.0, preds_dict["q_0.9"])
-
-  # Sort across quantiles per row to eliminate crossing
-  stacked = np.sort(np.vstack([q10, q50, q90]), axis=0)
-  return stacked[0, :], stacked[1, :], stacked[2, :]
+  """Return sorted non-crossing outputs for all trained quantile levels."""
+  levels = sorted(
+      (float(key.removeprefix("q_")), key)
+      for key in preds_dict
+      if key.startswith("q_")
+  )
+  stacked = np.maximum(0.0, np.vstack([preds_dict[key] for _, key in levels]))
+  stacked = np.sort(stacked, axis=0)
+  return {f"pred_q{int(level * 100):02d}": stacked[i] for i, (level, _) in enumerate(levels)}
 
 
 def run_pipeline():
@@ -150,23 +227,23 @@ def run_pipeline():
   print("\nTrained models saved to models/lgbm_models.joblib")
 
   # Post-process quantile crossing
-  val_q10, val_q50, val_q90 = enforce_monotonicity(val_preds)
-  test_q10, test_q50, test_q90 = enforce_monotonicity(test_preds)
+  val_quantiles = enforce_monotonicity(val_preds)
+  test_quantiles = enforce_monotonicity(test_preds)
 
   # Build Validation predictions DataFrame
   df_val_eval = splits["meta_val"].copy()
   df_val_eval["pred_point"] = np.maximum(0.0, val_preds["point"])
-  df_val_eval["pred_q10"] = val_q10
-  df_val_eval["pred_q50"] = val_q50
-  df_val_eval["pred_q90"] = val_q90
+  for name, values in val_quantiles.items():
+    df_val_eval[name] = values
+  df_val_eval["pred_q10_model"] = val_preds["q10_model_raw"]
   df_val_eval["split"] = "val"
 
   # Build Test predictions DataFrame
   df_test_eval = splits["meta_test"].copy()
   df_test_eval["pred_point"] = np.maximum(0.0, test_preds["point"])
-  df_test_eval["pred_q10"] = test_q10
-  df_test_eval["pred_q50"] = test_q50
-  df_test_eval["pred_q90"] = test_q90
+  for name, values in test_quantiles.items():
+    df_test_eval[name] = values
+  df_test_eval["pred_q10_model"] = test_preds["q10_model_raw"]
   # Baselines on test set: seasonal naive (lag 7) and rolling mean (rolling 28)
   df_test_eval["baseline_naive"] = splits["X_test"]["sales_lag_7"].values
   df_test_eval["baseline_moving_avg"] = splits["X_test"][
@@ -181,8 +258,9 @@ def run_pipeline():
   # Quick check on test set MAE
   y_test = splits["y_test"].values
   mae_point = mean_absolute_error(y_test, df_test_eval["pred_point"])
-  mae_median = mean_absolute_error(y_test, test_q50)
+  mae_median = mean_absolute_error(y_test, test_quantiles["pred_q50"])
   mae_naive = mean_absolute_error(y_test, df_test_eval["baseline_naive"])
+  rmse_point = mean_squared_error(y_test, df_test_eval["pred_point"]) ** 0.5
 
   print("\n" + "=" * 50)
   print("INITIAL TEST ACCURACY SNAPSHOT (MAE):")
@@ -190,6 +268,7 @@ def run_pipeline():
   print(f"Seasonal Naive Baseline MAE: {mae_naive:.3f}")
   print(f"Point Forecast Model MAE:    {mae_point:.3f}")
   print(f"Median Forecast (q50) MAE:   {mae_median:.3f}")
+  print(f"Point Forecast Model RMSE:   {rmse_point:.3f}")
   print("=" * 50)
 
 

@@ -24,9 +24,18 @@ def compute_interval_metrics(
   }
 
 
+def _conformal_quantile(scores: np.ndarray, alpha: float) -> float:
+  """Finite-sample split-conformal order statistic for a score vector."""
+  scores = np.asarray(scores, dtype=float)
+  if not len(scores):
+    raise ValueError("Cannot calibrate an empty validation group.")
+  rank = min(len(scores), int(np.ceil((1.0 - alpha) * (len(scores) + 1))))
+  return float(np.sort(scores)[rank - 1])
+
+
 def apply_cqr(
     df_preds: pd.DataFrame, alpha: float = 0.20
-) -> tuple[pd.DataFrame, float]:
+) -> tuple[pd.DataFrame, dict[str, float]]:
   """Computes Conformalized Quantile Regression (CQR) adjustment on validation set
 
   and calibrates test predictions.
@@ -45,22 +54,26 @@ def apply_cqr(
   # Nonconformity error: positive if y is outside [q10, q90]
   val_errors = np.maximum(q10_val - y_val, y_val - q90_val)
 
-  # Conformal correction factor with finite-sample adjustment
-  n_val = len(val_errors)
-  q_level = np.clip(
-      np.ceil((1.0 - alpha) * (n_val + 1)) / n_val, 0.0, 1.0
-  )
-  conformal_adjustment = float(
-      np.quantile(val_errors, q_level, method="higher")
-  )
+  # Use volume tiers derived strictly from training history. Each tier gets
+  # its own validation correction; this lets interval width respond to the
+  # demand scale without conditioning on the unknown future actual value.
+  if "volume_tier" in df_val.columns and df_val["volume_tier"].notna().any():
+    adjustments = {
+        str(tier): _conformal_quantile(
+            val_errors[df_val["volume_tier"].to_numpy() == tier], alpha
+        )
+        for tier in df_val["volume_tier"].dropna().unique()
+    }
+    fallback = _conformal_quantile(val_errors, alpha)
+    df_test["cqr_adjustment"] = df_test["volume_tier"].map(adjustments).fillna(fallback)
+  else:
+    fallback = _conformal_quantile(val_errors, alpha)
+    adjustments = {"All": fallback}
+    df_test["cqr_adjustment"] = fallback
 
-  # 2. Adjust test intervals
-  df_test["cqr_q10"] = np.maximum(
-      0.0, df_test["pred_q10"] - conformal_adjustment
-  )
-  df_test["cqr_q90"] = np.maximum(
-      0.0, df_test["pred_q90"] + conformal_adjustment
-  )
+  delta = df_test["cqr_adjustment"]
+  df_test["cqr_q10"] = np.maximum(0.0, df_test["pred_q10"] - delta)
+  df_test["cqr_q90"] = np.maximum(0.0, df_test["pred_q90"] + delta)
 
   # 3. Baseline comparison: Residual-based interval on Point model
   residuals = df_val["sales"].values - df_val["pred_point"].values
@@ -70,7 +83,7 @@ def apply_cqr(
   df_test["res_q10"] = np.maximum(0.0, df_test["pred_point"] + res_q10)
   df_test["res_q90"] = np.maximum(0.0, df_test["pred_point"] + res_q90)
 
-  return df_test, conformal_adjustment
+  return df_test, adjustments
 
 
 def run_calibration():
@@ -80,7 +93,7 @@ def run_calibration():
 
   # Run CQR
   alpha = 0.20  # Nominal target: 80% coverage
-  df_test_calibrated, adjustment = apply_cqr(df_preds, alpha=alpha)
+  df_test_calibrated, adjustments = apply_cqr(df_preds, alpha=alpha)
 
   y_test = df_test_calibrated["sales"].values
 
@@ -116,12 +129,24 @@ def run_calibration():
   print("\n" + "=" * 65)
   print(f"INTERVAL CALIBRATION RESULTS (Nominal Target: {int((1-alpha)*100)}%)")
   print("=" * 65)
-  print(f"CQR Adjustment Scalar Added to Margins: +{adjustment:.3f} units")
+  print("CQR adjustment by training-history volume tier:")
+  for tier, adjustment in adjustments.items():
+    print(f"  {tier}: {adjustment:+.3f} units")
   print("-" * 65)
   print(
       summary_df.to_string(
-          index=False, formatters={"coverage": "{:.2%}".format}
+          index=False,
+          formatters={
+              "coverage": "{:.2%}".format,
+              "mean_width": "{:.3f}".format,
+              "winkler_score": "{:.3f}".format,
+          },
       )
+  )
+  positive = df_test_calibrated["sales"] > 0
+  print(
+      "Positive-sales coverage: "
+      f"{compute_interval_metrics(y_test[positive], df_test_calibrated.loc[positive, 'cqr_q10'].to_numpy(), df_test_calibrated.loc[positive, 'cqr_q90'].to_numpy(), alpha)['coverage']:.2%}"
   )
   print("=" * 65)
 

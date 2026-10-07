@@ -40,6 +40,27 @@ def simulate_inventory_cost(
   }
 
 
+def forecast_at_quantile(df: pd.DataFrame, tau: float) -> np.ndarray:
+  """Interpolate between available trained quantiles for each forecast row."""
+  level_cols = [
+      (level / 100, f"pred_q{level:02d}")
+      for level in (10, 50, 75, 90, 95, 99)
+      if f"pred_q{level:02d}" in df
+  ]
+  if not level_cols:
+    raise ValueError("No trained quantile forecast columns are available.")
+  levels = np.array([level for level, _ in level_cols])
+  values = np.column_stack([df[col].to_numpy(float) for _, col in level_cols])
+  if tau <= levels[0]:
+    return np.maximum(0.0, values[:, 0])
+  if tau >= levels[-1]:
+    return np.maximum(0.0, values[:, -1])
+  upper = int(np.searchsorted(levels, tau, side="right"))
+  lower = upper - 1
+  weight = (tau - levels[lower]) / (levels[upper] - levels[lower])
+  return np.maximum(0.0, values[:, lower] + weight * (values[:, upper] - values[:, lower]))
+
+
 def run_strategy_comparison(
     df: pd.DataFrame, c_u: float = 3.0, c_o: float = 1.0
 ) -> pd.DataFrame:
@@ -52,30 +73,20 @@ def run_strategy_comparison(
   # Strategy 2: Stocking at Median (q50)
   stock_median = df["pred_q50"].values
 
-  # Strategy 3: Classical Safety Stock (Mean + 0.674 * Std for 75% normal service level)
-  # Standard deviation estimated from test residuals
-  sigma_est = np.std(demand - stock_point)
-  z_75 = 0.674  # Normal inverse CDF for 0.75
-  stock_safety = np.maximum(0.0, stock_point + z_75 * sigma_est)
-
-  # Strategy 4: Quantile Newsvendor Policy
+  # Quantile Newsvendor Policy
   # Critical ratio tau* = 3 / (3 + 1) = 0.75
   # Linear interpolation between q50 and q90
   # tau* is 62.5% of the distance from 0.50 to 0.90
-  weight = (0.75 - 0.50) / (0.90 - 0.50)
-  stock_quantile_75 = df["pred_q50"].values + weight * (
-      df["pred_q90"].values - df["pred_q50"].values
-  )
+  stock_quantile_75 = forecast_at_quantile(df, 0.75)
 
-  # Strategy 5: Conservative Upper Band (q90)
+  # Conservative upper-band policy
   stock_q90 = df["pred_q90"].values
 
   strategies = {
       "1. Point Forecast (RMSE)": stock_point,
       "2. Median Forecast (q50)": stock_median,
-      "3. Point + Gaussian Safety Stock": stock_safety,
-      "4. Optimal Quantile Policy (tau*=0.75)": stock_quantile_75,
-      "5. Conservative P90": stock_q90,
+      "3. Optimal Quantile Policy (tau*=0.75)": stock_quantile_75,
+      "4. Conservative P90": stock_q90,
   }
 
   results = []
@@ -101,16 +112,7 @@ def run_cost_sensitivity(
     c_u = ratio * c_o
     tau_star = c_u / (c_u + c_o)
 
-    # Calculate optimal stock via quantile interpolation
-    if tau_star <= 0.50:
-      stock_opt = df["pred_q10"].values + (tau_star / 0.50) * (
-          df["pred_q50"].values - df["pred_q10"].values
-      )
-    else:
-      w = (tau_star - 0.50) / (0.90 - 0.50)
-      stock_opt = df["pred_q50"].values + w * (
-          df["pred_q90"].values - df["pred_q50"].values
-      )
+    stock_opt = forecast_at_quantile(df, tau_star)
 
     cost_point = simulate_inventory_cost(
         demand, df["pred_point"].values, c_u=c_u, c_o=c_o
@@ -156,6 +158,68 @@ def run_cost_sensitivity(
   return summary_df
 
 
+def run_stock_quantile_cost_curve(
+    df: pd.DataFrame, output_dir: str = "reports/figures"
+) -> pd.DataFrame:
+  """Compare test-set cost across stock quantiles and shortage/leftover costs."""
+  os.makedirs(output_dir, exist_ok=True)
+  levels = [0.10, 0.50, 0.75, 0.90, 0.95, 0.99]
+  columns = [f"pred_q{int(level * 100):02d}" for level in levels]
+  available = [(level, col) for level, col in zip(levels, columns) if col in df]
+  if len(available) < 3:
+    raise ValueError("Cost curve requires P10/P50/P90, and ideally P95/P99 forecasts.")
+
+  grid = np.round(np.arange(0.50, 0.991, 0.01), 2)
+  level_values = np.array([level for level, _ in available], dtype=float)
+  prediction_values = np.column_stack([
+      np.maximum(0.0, df[col].to_numpy(float)) for _, col in available
+  ])
+  ratios = [1, 2, 3, 5]
+  records = []
+  demand = df["sales"].to_numpy(float)
+  for ratio in ratios:
+    c_u, c_o = float(ratio), 1.0
+    for tau in grid:
+      upper_idx = min(
+          max(int(np.searchsorted(level_values, tau, side="right")), 1),
+          len(level_values) - 1,
+      )
+      lower_idx = upper_idx - 1
+      weight = (tau - level_values[lower_idx]) / (
+          level_values[upper_idx] - level_values[lower_idx]
+      )
+      stock = prediction_values[:, lower_idx] + weight * (
+          prediction_values[:, upper_idx] - prediction_values[:, lower_idx]
+      )
+      cost = simulate_inventory_cost(demand, stock, c_u=c_u, c_o=c_o)["Total Cost ($)"]
+      records.append({
+          "Stock Quantile": tau,
+          "Cu/Co Ratio": f"{ratio}:1",
+          "Total Cost ($)": cost,
+          "Theoretical Target": ratio / (ratio + 1),
+      })
+
+  curve = pd.DataFrame(records)
+  fig, ax = plt.subplots(figsize=(8.5, 5.0))
+  colors = {"1:1": "#667085", "2:1": "#2f80ed", "3:1": "#159a72", "5:1": "#e07a35"}
+  for label, group in curve.groupby("Cu/Co Ratio", sort=False):
+    ax.plot(group["Stock Quantile"], group["Total Cost ($)"], label=f"{label} shortage:extra", color=colors[label], linewidth=2.2)
+    target = float(group["Theoretical Target"].iloc[0])
+    ax.axvline(target, color=colors[label], linestyle=":", alpha=0.35, linewidth=1)
+    best = group.loc[group["Total Cost ($)"].idxmin()]
+    ax.scatter([best["Stock Quantile"]], [best["Total Cost ($)"]], color=colors[label], s=38, zorder=3)
+  ax.set_title("Test-set inventory cost by stocking quantile")
+  ax.set_xlabel("Stocking quantile")
+  ax.set_ylabel("Total simulated cost ($)")
+  ax.xaxis.set_major_formatter(plt.FuncFormatter(lambda value, _: f"{value:.0%}"))
+  ax.grid(True, linestyle=":", alpha=0.35)
+  ax.legend(title="Underage to overage cost")
+  fig.tight_layout()
+  fig.savefig(os.path.join(output_dir, "inventory_cost_by_quantile.png"), dpi=220)
+  plt.close(fig)
+  return curve
+
+
 def main():
   df = load_test_predictions()
 
@@ -196,6 +260,11 @@ def main():
           },
       )
   )
+
+  print("\nCOST CURVE: STOCK QUANTILE VS. TOTAL TEST COST")
+  curve = run_stock_quantile_cost_curve(df)
+  best = curve.loc[curve.groupby("Cu/Co Ratio")["Total Cost ($)"].idxmin()]
+  print(best[["Cu/Co Ratio", "Stock Quantile", "Total Cost ($)"]].to_string(index=False))
 
 
 if __name__ == "__main__":

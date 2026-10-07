@@ -15,10 +15,17 @@ def add_calendar_features(df: pd.DataFrame) -> pd.DataFrame:
   df['is_weekend'] = df['dayofweek'].isin([5, 6]).astype(int)
   df['is_month_end'] = df['date'].dt.is_month_end.astype(int)
 
-  # Fill missing event names as 'None' and create binary holiday flag
-  if 'event_name_1' in df.columns:
-    df['event_name_1'] = df['event_name_1'].fillna('None').astype(str)
-    df['is_event'] = (df['event_name_1'] != 'None').astype(int)
+  # Events are sparse by design; encode missing names, rather than dropping
+  # almost every ordinary calendar day during feature cleanup.
+  for col in ['event_name_1', 'event_type_1', 'event_name_2', 'event_type_2']:
+    if col in df.columns:
+      df[col] = df[col].fillna('None').astype(str)
+  if 'event_name_1' in df.columns or 'event_name_2' in df.columns:
+    events = [
+        df[col].ne('None') for col in ['event_name_1', 'event_name_2']
+        if col in df.columns
+    ]
+    df['is_event'] = np.logical_or.reduce(events).astype(int)
   else:
     df['is_event'] = 0
 
@@ -36,7 +43,7 @@ def add_lag_and_rolling_features(
   df['date'] = pd.to_datetime(df['date'])
   df = df.sort_values(['store', 'item', 'date']).reset_index(drop=True)
 
-  group = df.groupby(['store', 'item'])['sales']
+  group = df.groupby(['store', 'item'], sort=False)['sales']
 
   # 1. Direct Lags (must be >= horizon)
   lags = [horizon, horizon + 7, horizon + 14, horizon + 21, horizon + 28]
@@ -47,18 +54,39 @@ def add_lag_and_rolling_features(
   # Shifting by horizon ensures window looks only at historical data
   windows = [7, 14, 28]
   for w in windows:
-    shifted_roll = group.shift(horizon).rolling(window=w, min_periods=w)
-    df[f'rolling_mean_{w}'] = shifted_roll.mean()
-    df[f'rolling_std_{w}'] = shifted_roll.std()
-    df[f'rolling_min_{w}'] = shifted_roll.min()
-    df[f'rolling_max_{w}'] = shifted_roll.max()
+    shifted = group.shift(horizon)
+    rolling_group = shifted.groupby([df['store'], df['item']], sort=False)
+    df[f'rolling_mean_{w}'] = rolling_group.transform(
+        lambda values: values.rolling(window=w, min_periods=w).mean()
+    )
+    df[f'rolling_std_{w}'] = rolling_group.transform(
+        lambda values: values.rolling(window=w, min_periods=w).std()
+    )
+    df[f'rolling_min_{w}'] = rolling_group.transform(
+        lambda values: values.rolling(window=w, min_periods=w).min()
+    )
+    df[f'rolling_max_{w}'] = rolling_group.transform(
+        lambda values: values.rolling(window=w, min_periods=w).max()
+    )
+
+  # Lower-tail history is especially useful for P10 models on intermittent
+  # series: it distinguishes high-volume items' ordinary low days from the
+  # many genuinely near-zero items in the pooled training set.
+  for w in [28, 56]:
+    df[f'rolling_q10_{w}'] = rolling_group.transform(
+        lambda values: values.rolling(window=w, min_periods=w).quantile(0.10)
+    )
 
   # 3. Price change / promo ratio
   if 'sell_price' in df.columns:
     price_group = df.groupby(['store', 'item'])['sell_price']
     df['price_lag_7'] = price_group.shift(horizon)
-    df['price_rolling_mean_28'] = (
-        price_group.shift(horizon).rolling(28, min_periods=7).mean()
+    shifted_price = price_group.shift(horizon)
+    price_rolling_group = shifted_price.groupby(
+        [df['store'], df['item']], sort=False
+    )
+    df['price_rolling_mean_28'] = price_rolling_group.transform(
+        lambda values: values.rolling(28, min_periods=7).mean()
     )
     df['price_ratio'] = df['price_lag_7'] / (df['price_rolling_mean_28'] + 1e-5)
 
@@ -82,9 +110,16 @@ def generate_feature_dataset(
   )
   df = add_lag_and_rolling_features(df, horizon=horizon)
 
-  # Drop warmup rows (first ~35 days contain NaNs due to rolling/lag lookbacks)
+  # Remove only rows without the sales history required by the model. Prices
+  # can legitimately be missing before an item is sold in a store; LightGBM
+  # handles those missing optional price signals natively.
+  required_history = [
+      f'sales_lag_{lag}' for lag in
+      [horizon, horizon + 7, horizon + 14, horizon + 21, horizon + 28]
+  ] + [f'rolling_mean_{window}' for window in [7, 14, 28]]
+  required_history += [f'rolling_q10_{window}' for window in [28, 56]]
   initial_len = len(df)
-  df_features = df.dropna().reset_index(drop=True)
+  df_features = df.dropna(subset=required_history).reset_index(drop=True)
   print(
       f'Features created: {len(df_features):,} rows (dropped'
       f' {initial_len - len(df_features):,} warmup rows).'

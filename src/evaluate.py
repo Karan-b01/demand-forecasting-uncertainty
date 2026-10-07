@@ -2,7 +2,7 @@ import os
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from sklearn.metrics import mean_absolute_error, root_mean_squared_error
+from sklearn.metrics import mean_absolute_error, mean_squared_error
 
 
 def load_data(
@@ -29,7 +29,7 @@ def evaluate_point_forecasts(df: pd.DataFrame) -> pd.DataFrame:
 
   for name, preds in models.items():
     mae = mean_absolute_error(y, preds)
-    rmse = root_mean_squared_error(y, preds)
+    rmse = mean_squared_error(y, preds) ** 0.5
     metrics.append({"Model": name, "MAE": mae, "RMSE": rmse})
 
   return pd.DataFrame(metrics)
@@ -38,9 +38,9 @@ def evaluate_point_forecasts(df: pd.DataFrame) -> pd.DataFrame:
 def evaluate_segment_coverage(df: pd.DataFrame) -> pd.DataFrame:
   """Audits empirical 80% coverage across item volume tiers and day of week."""
   df = df.copy()
-  df["covered"] = (df["sales"] >= df["pred_q10"]) & (
-      df["sales"] <= df["pred_q90"]
-  )
+  lower = "cqr_q10" if "cqr_q10" in df.columns else "pred_q10"
+  upper = "cqr_q90" if "cqr_q90" in df.columns else "pred_q90"
+  df["covered"] = (df["sales"] >= df[lower]) & (df["sales"] <= df[upper])
   df["day_name"] = df["date"].dt.day_name()
 
   # Volume tiers by item
@@ -190,6 +190,33 @@ def plot_interval_fan_chart(
 
 def run_evaluation():
   df = load_data()
+
+  from src.calibrate import compute_interval_metrics
+
+  interval_col_lower = "cqr_q10" if "cqr_q10" in df.columns else "pred_q10"
+  interval_col_upper = "cqr_q90" if "cqr_q90" in df.columns else "pred_q90"
+  interval = compute_interval_metrics(
+      df["sales"].to_numpy(),
+      df[interval_col_lower].to_numpy(),
+      df[interval_col_upper].to_numpy(),
+      alpha=0.20,
+  )
+  print("\n80% TEST INTERVAL (calibrated when available)")
+  print(
+      f"Coverage: {interval['coverage']:.1%} | "
+      f"Mean width: {interval['mean_width']:.3f} | "
+      f"Winkler score: {interval['winkler_score']:.3f}"
+  )
+  zero = df["sales"].eq(0).to_numpy()
+  positive = df["sales"].gt(0).to_numpy()
+  covered = (df["sales"].to_numpy() >= df[interval_col_lower].to_numpy()) & (
+      df["sales"].to_numpy() <= df[interval_col_upper].to_numpy()
+  )
+  print(
+      f"Zero-sales coverage: {covered[zero].mean():.1%} "
+      f"({zero.sum():,} records) | Positive-sales coverage: "
+      f"{covered[positive].mean():.1%} ({positive.sum():,} records)"
+  )
 
   print("=" * 65)
   print("1. POINT FORECAST BENCHMARK EVALUATION (TEST SET)")

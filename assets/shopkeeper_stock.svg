@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 500" role="img" aria-labelledby="title description">
+  <title id="title">Shopkeeper thinking about stock</title>
+  <desc id="description">A shopkeeper checks a stock list in a small shop with stocked shelves and cartons, thinking whether to order more.</desc>
+  <rect x="8" y="8" width="744" height="484" rx="20" fill="#f1e8dc"/>
+  <path d="M48 104h664v348H48z" fill="#fffaf2" stroke="#344b55" stroke-width="6"/>
+  <path d="M32 99 78 42h604l46 57z" fill="#3c7180" stroke="#344b55" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M96 43h82v57H50zM260 43h82v57h-82zM424 43h82v57h-82zM588 43h82l46 57h-82z" fill="#df9761"/>
+  <path d="M48 193h664M48 293h664" stroke="#344b55" stroke-width="7"/>
+  <path d="M67 116h620v326H67z" fill="#f9f3e9"/>
+  <path d="M67 193h620M67 293h620" stroke="#344b55" stroke-width="6"/>
+  <g stroke="#344b55" stroke-width="4">
+    <rect x="91" y="136" width="45" height="49" rx="7" fill="#8db4a4"/>
+    <rect x="147" y="128" width="42" height="57" rx="7" fill="#e3b85c"/>
+    <rect x="200" y="142" width="54" height="43" rx="7" fill="#dc8c70"/>
+    <rect x="282" y="132" width="51" height="53" rx="7" fill="#a7b8cf"/>
+    <rect x="344" y="144" width="42" height="41" rx="7" fill="#e3b85c"/>
+    <rect x="395" y="127" width="50" height="58" rx="7" fill="#8db4a4"/>
+    <rect x="479" y="140" width="52" height="45" rx="7" fill="#dc8c70"/>
+    <rect x="542" y="128" width="43" height="57" rx="7" fill="#a7b8cf"/>
+    <rect x="596" y="140" width="67" height="45" rx="7" fill="#e3b85c"/>
+    <rect x="91" y="216" width="63" height="68" rx="8" fill="#e3b85c"/>
+    <rect x="166" y="229" width="47" height="55" rx="8" fill="#8db4a4"/>
+    <rect x="225" y="211" width="48" height="73" rx="8" fill="#dc8c70"/>
+    <rect x="283" y="221" width="64" height="63" rx="8" fill="#a7b8cf"/>
+    <rect x="361" y="211" width="51" height="73" rx="8" fill="#e3b85c"/>
+    <rect x="426" y="225" width="65" height="59" rx="8" fill="#8db4a4"/>
+    <rect x="505" y="214" width="49" height="70" rx="8" fill="#dc8c70"/>
+    <rect x="568" y="228" width="95" height="56" rx="8" fill="#a7b8cf"/>
+  </g>
+  <g fill="#344b55" opacity=".72">
+    <path d="M102 157h23v4h-23zm55-4h22v4h-22zm77 4h24v4h-24zm58-3h34v4h-34zm61 5h22v4h-22zm52-5h31v4h-31zm83 4h29v4h-29zm67-4h20v4h-20z"/>
+  </g>
+  <path d="M67 374h620v68H67z" fill="#d9ad7c" stroke="#344b55" stroke-width="6"/>
+  <path d="M67 374h620" stroke="#344b55" stroke-width="8"/>
+  <g stroke="#344b55" stroke-width="5" stroke-linejoin="round">
+    <path d="M91 338h97v91H91z" fill="#d9a86d"/>
+    <path d="M91 369h97m-49-31v31m-48 0 49 60 48-60" fill="none"/>
+    <path d="M573 320h89v109h-89z" fill="#c88e58"/>
+    <path d="M573 355h89m-45-35v35m-44 0 44 74 45-74" fill="none"/>
+  </g>
+  <g stroke="#344b55" stroke-width="5" stroke-linejoin="round">
+    <path d="M286 321q0-70 61-70t61 70v54H286z" fill="#3c7180"/>
+    <path d="M301 246q4-57 49-57 46 0 50 57z" fill="#e4b48a"/>
+    <path d="M294 226q6-59 59-59t59 59z" fill="#344b55"/>
+    <path d="M329 217q15-16 31 0" fill="none" stroke="#344b55" stroke-width="4"/>
+    <circle cx="321" cy="218" r="4" fill="#344b55" stroke="none"/>
+    <circle cx="360" cy="218" r="4" fill="#344b55" stroke="none"/>
+    <path d="M329 235q13 12 26 0" fill="none" stroke="#a75e4f" stroke-width="4"/>
+    <path d="M300 319q18-24 45-17l29 17-23 34-38-12" fill="#df9761"/>
+    <path d="M380 321q-12-20-29-17l-27 18 24 34 37-10" fill="#df9761"/>
+    <path d="M321 310h51v45h-51z" fill="#d9a86d"/>
+    <path d="M321 322h51m-26-12v12m-25 0 25 33 26-33" fill="none"/>
+    <path d="M314 319q-14 8-18 23m82-23q14 8 18 23" fill="none" stroke="#df9761" stroke-width="9"/>
+    <path d="M278 330l-10-5m13 16-12 1" fill="none" stroke="#3c7180" stroke-width="4"/>
+  </g>
+  <g stroke="#344b55" stroke-width="4" stroke-linejoin="round">
+    <path d="M432 171c0-29 26-49 59-49 14 0 28 4 38 12 10-8 24-12 38-12 33 0 59 20 59 49s-26 48-59 48h-53l-29 23 6-28c-35-3-59-20-59-43z" fill="#fffdf8"/>
+    <text x="528" y="169" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="700" fill="#344b55" stroke="none">Add more</text>
+    <text x="528" y="196" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="700" fill="#344b55" stroke="none">stock?</text>
+  </g>
+  <circle cx="416" cy="227" r="8" fill="#fffdf8" stroke="#344b55" stroke-width="3"/>
+  <circle cx="400" cy="242" r="5" fill="#fffdf8" stroke="#344b55" stroke-width="3"/>
+</svg>
