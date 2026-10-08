@@ -1,3 +1,21 @@
+<!-- Badges -->
+<div align="center">
+  
+  ![Python](https://img.shields.io/badge/Python-latest-3776AB?logo=python&logoColor=white)
+  ![pandas](https://img.shields.io/badge/pandas-latest-150458?logo=pandas&logoColor=white)
+  ![NumPy](https://img.shields.io/badge/NumPy-latest-013243?logo=numpy&logoColor=white)
+  ![LightGBM](https://img.shields.io/badge/LightGBM-latest-FF8C00?logoColor=white)
+  ![scikit-learn](https://img.shields.io/badge/scikit--learn-latest-F7931E?logo=scikit-learn&logoColor=white)
+  ![FastAPI](https://img.shields.io/badge/FastAPI-latest-009688?logo=fastapi&logoColor=white)
+
+  ![JavaScript](https://img.shields.io/badge/JavaScript-ES6+-F7DF1E?logo=javascript&logoColor=black)
+  ![React](https://img.shields.io/badge/React-latest-00bcd4?logo=react&logoColor=white)
+  ![Vite](https://img.shields.io/badge/Vite-latest-646CFF?logo=vite&logoColor=white)
+  ![Recharts](https://img.shields.io/badge/Recharts-latest-22B5BF?logoColor=white)
+  ![Matplotlib](https://img.shields.io/badge/Matplotlib-latest-11557c?logo=python&logoColor=white)
+
+</div>
+
 # Demand Forecasting with Uncertainty
 
 An inventory-planning project for daily Walmart item demand. LightGBM forecasts demand percentiles, conformalized quantile regression (CQR) calibrates prediction intervals, and a cost model compares inventory choices when missed sales and leftover stock have different costs.
