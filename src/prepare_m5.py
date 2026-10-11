@@ -1,4 +1,5 @@
 """Convert the official M5 wide sales file into the project's daily panel."""
+
 from pathlib import Path
 import argparse
 
@@ -37,9 +38,9 @@ def prepare_m5(
     if selection == "high-volume":
         selected_items = ranked_items[-selected_count:]
     elif selection == "demand-spread":
-        selected_positions = np.linspace(
-            0, len(ranked_items) - 1, selected_count
-        ).round().astype(int)
+        selected_positions = (
+            np.linspace(0, len(ranked_items) - 1, selected_count).round().astype(int)
+        )
         selected_items = ranked_items[selected_positions]
     else:
         raise ValueError("selection must be 'demand-spread' or 'high-volume'")
@@ -50,22 +51,37 @@ def prepare_m5(
     )
 
     long = sales.melt(
-        id_vars=id_columns, value_vars=day_columns,
-        var_name="d", value_name="sales",
+        id_vars=id_columns,
+        value_vars=day_columns,
+        var_name="d",
+        value_name="sales",
     )
     long = long.rename(columns={"store_id": "store", "item_id": "item"})
 
     calendar = pd.read_csv(calendar_path)
     keep_calendar = [
-        col for col in ["d", "date", "wm_yr_wk", "event_name_1", "event_type_1", "event_name_2", "event_type_2"]
+        col
+        for col in [
+            "d",
+            "date",
+            "wm_yr_wk",
+            "event_name_1",
+            "event_type_1",
+            "event_name_2",
+            "event_type_2",
+        ]
         if col in calendar.columns
     ]
-    long = long.merge(calendar[keep_calendar], on="d", how="left", validate="many_to_one")
+    long = long.merge(
+        calendar[keep_calendar], on="d", how="left", validate="many_to_one"
+    )
 
     prices = pd.read_csv(prices_path)
     long = long.merge(
         prices.rename(columns={"store_id": "store", "item_id": "item"}),
-        on=["store", "item", "wm_yr_wk"], how="left", validate="many_to_one",
+        on=["store", "item", "wm_yr_wk"],
+        how="left",
+        validate="many_to_one",
     )
     output_path = Path(output)
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -77,11 +93,14 @@ def prepare_m5(
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
-        "--item-count", type=int, default=100,
+        "--item-count",
+        type=int,
+        default=100,
         help="Number of distinct products to keep across every store (default: 100).",
     )
     parser.add_argument(
-        "--selection", choices=["demand-spread", "high-volume"],
+        "--selection",
+        choices=["demand-spread", "high-volume"],
         default="demand-spread",
         help="Sample across demand levels, or keep the highest-selling products.",
     )

@@ -10,6 +10,7 @@
     "**/data/raw": true,
     "**/data/processed": true,
     "**/models": true,
+    "**/frontend/dist": true,
     "**/*.pyc": true,
     "**/*.pyo": true
   },
@@ -17,5 +18,29 @@
   "explorer.fileNesting.expand": "never",
   "explorer.fileNesting.patterns": {
     "package.json": "package-lock.json"
+  },
+  "[javascript]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
+    "editor.formatOnSave": true
+  },
+  "[javascriptreact]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
+    "editor.formatOnSave": true
+  },
+  "[css]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
+    "editor.formatOnSave": true
+  },
+  "[html]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
+    "editor.formatOnSave": true
+  },
+  "[json]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
+    "editor.formatOnSave": true
+  },
+  "[python]": {
+    "editor.defaultFormatter": "ms-python.black-formatter",
+    "editor.formatOnSave": true
   }
 }
