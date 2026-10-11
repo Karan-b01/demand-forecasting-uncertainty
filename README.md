@@ -114,12 +114,14 @@ The full data-processing, training, calibration, evaluation, inventory, and fail
 
 First complete the pipeline. Then use two terminals. Run the API command from the repository root and the web-app commands from `frontend/`.
 
-**Terminal 1 - API** (run from the repository root; activation is optional)
+**Terminal 1 - API** (run from the repository root)
 
 ```powershell
 .\.venv\Scripts\Activate.ps1
-\.venv\Scripts\python.exe -m uvicorn backend.main:app --reload --port 8000
+.\.venv\Scripts\python.exe -m uvicorn backend.main:app --reload --host 127.0.0.1 --port 8000
 ```
+
+The API command uses the project virtual environment. Confirm the API is ready at `http://127.0.0.1:8000/api/health`; it should return `{"status":"ok","forecast_data":true}` after the pipeline has generated forecast files. If `forecast_data` is `false`, run the pipeline steps above before opening the dashboard.
 
 **Terminal 2 - web app**
 
