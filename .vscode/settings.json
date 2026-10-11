@@ -1,0 +1,21 @@
+{
+  "files.exclude": {
+    "**/.chrome-capture-profile*": true,
+    "**/.edge-capture-profile*": true,
+    "**/.pytest_cache": true,
+    "**/__pycache__": true,
+    "**/.ipynb_checkpoints": true,
+    "**/.venv": true,
+    "**/node_modules": true,
+    "**/data/raw": true,
+    "**/data/processed": true,
+    "**/models": true,
+    "**/*.pyc": true,
+    "**/*.pyo": true
+  },
+  "explorer.fileNesting.enabled": true,
+  "explorer.fileNesting.expand": "never",
+  "explorer.fileNesting.patterns": {
+    "package.json": "package-lock.json"
+  }
+}

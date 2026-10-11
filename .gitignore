@@ -42,6 +42,8 @@ aws-credentials
 # IDE and OS files
 .DS_Store
 .vscode/
+!.vscode/
+!.vscode/settings.json
 .idea/
 .ipynb_checkpoints/
 frontend/node_modules/
