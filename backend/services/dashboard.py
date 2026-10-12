@@ -4,7 +4,12 @@ import numpy as np
 import pandas as pd
 from fastapi import HTTPException
 
-from backend.services.inventory import inventory_cost, quantile_grid, row_quantile
+from backend.services.inventory import (
+    critical_ratio,
+    inventory_cost,
+    quantile_grid,
+    row_quantile,
+)
 from backend.services.metrics import forecast_metrics, interval_summary
 
 
@@ -12,11 +17,12 @@ def dashboard_data(df, store, item, underage_cost=3, overage_cost=1):
     series = df[(df.store == store) & (df.item == item)].sort_values("date")
     if series.empty:
         raise HTTPException(404, "No forecast found for this selection.")
-    ratio = underage_cost / (underage_cost + overage_cost)
+    ratio = critical_ratio(underage_cost, overage_cost)
     rows = []
     for row in series.itertuples():
         p10 = float(getattr(row, "cqr_q10", row.pred_q10))
         p90 = float(getattr(row, "cqr_q90", row.pred_q90))
+        stock_target = row_quantile(row, ratio)
         rows.append(
             {
                 "date": row.date.strftime("%Y-%m-%d"),
@@ -26,7 +32,8 @@ def dashboard_data(df, store, item, underage_cost=3, overage_cost=1):
                 "p50": float(row.pred_q50),
                 "p90": p90,
                 "interval": max(0.0, p90 - p10),
-                "stock": row_quantile(row, ratio),
+                "stock": stock_target,
+                "recommended_safety_stock": stock_target,
                 "inside_interval": bool(p10 <= float(row.sales) <= p90),
             }
         )
