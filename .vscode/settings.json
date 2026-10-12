@@ -7,8 +7,6 @@
     "**/.ipynb_checkpoints": true,
     "**/.venv": true,
     "**/node_modules": true,
-    "**/data/raw": true,
-    "**/data/processed": true,
     "**/models": true,
     "**/frontend/dist": true,
     "**/*.pyc": true,
