@@ -82,13 +82,18 @@ With the M5 files in `data/raw/`, run the full pipeline from the repository root
 
 ```powershell
 .\.venv\Scripts\python.exe -m src.prepare_m5
-.\.venv\Scripts\python.exe -m src.features
+.\.venv\Scripts\python.exe -m src.features --lead-time 7
 .\.venv\Scripts\python.exe -m src.train
 .\.venv\Scripts\python.exe -m src.calibrate
 .\.venv\Scripts\python.exe -m src.evaluate
 .\.venv\Scripts\python.exe -m src.inventory
 .\.venv\Scripts\python.exe -m src.failure_analysis
 ```
+
+Feature generation defaults to a one-day lead time. This project's original
+evaluation uses a seven-day lead, so the reproduction command sets
+`--lead-time 7` explicitly. Retrain the models after changing lead time so the
+saved model schema matches the generated features.
 
 Or run the same sequence as a script. It stops with an explanation if the project environment or a required raw file is missing:
 

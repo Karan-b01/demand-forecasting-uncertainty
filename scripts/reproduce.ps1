@@ -30,7 +30,12 @@ try {
   )
   foreach ($step in $steps) {
     Write-Host "`n=== python -m $step ===" -ForegroundColor Cyan
-    & $pythonExe -m $step
+    if ($step -eq "src.features") {
+      & $pythonExe -m $step --lead-time 7
+    }
+    else {
+      & $pythonExe -m $step
+    }
     if ($LASTEXITCODE -ne 0) {
       throw "Pipeline step failed: python -m $step (exit code $LASTEXITCODE)"
     }

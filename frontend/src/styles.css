@@ -171,6 +171,121 @@ select {
   width: calc(100% - 258px);
   max-width: 1720px;
 }
+.scenario-panel {
+  margin: 18px 0;
+  padding: 18px 20px;
+  border: 1px solid #dce5df;
+  border-radius: 7px;
+  background: #fff;
+}
+.scenario-panel .panel-heading {
+  margin-bottom: 13px;
+}
+.scenario-panel .panel-heading h2 {
+  margin: 5px 0;
+  font-size: 18px;
+}
+.scenario-panel .panel-heading p {
+  margin: 0;
+  color: #68766f;
+  font-size: 12px;
+}
+.scenario-controls {
+  display: grid;
+  grid-template-columns: minmax(130px, 0.75fr) minmax(190px, 1fr) auto auto;
+  align-items: end;
+  gap: 18px;
+}
+.scenario-controls > label {
+  display: block;
+  color: #506057;
+  font-size: 11px;
+}
+.scenario-controls select {
+  display: block;
+  width: 100%;
+  margin-top: 6px;
+  padding: 8px;
+  border: 1px solid #d3ddd6;
+  border-radius: 4px;
+  background: #fff;
+  color: #26342e;
+}
+.scenario-price b {
+  float: right;
+  color: #26704c;
+}
+.scenario-price input {
+  display: block;
+  width: 100%;
+  margin: 12px 0 4px;
+  accent-color: #388b62;
+}
+.scenario-price > span {
+  display: flex;
+  justify-content: space-between;
+  color: #87948d;
+}
+.scenario-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 0;
+  border: 0;
+  background: transparent;
+  color: #4e5d55;
+  font-size: 11px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.toggle-track {
+  width: 32px;
+  height: 18px;
+  padding: 2px;
+  border-radius: 12px;
+  background: #aab5ae;
+  transition: background 140ms ease;
+}
+.toggle-track span {
+  display: block;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform 140ms ease;
+}
+.scenario-toggle.active .toggle-track {
+  background: #36865d;
+}
+.scenario-toggle.active .toggle-track span {
+  transform: translateX(14px);
+}
+.scenario-run {
+  min-height: 36px;
+  white-space: nowrap;
+}
+.scenario-run:disabled {
+  opacity: 0.65;
+  cursor: wait;
+}
+.scenario-result {
+  margin-top: 14px;
+  padding: 10px 12px;
+  border-left: 3px solid #bd4d82;
+  background: #faf5f8;
+  color: #49574f;
+  font-size: 12px;
+  line-height: 1.6;
+}
+.scenario-result b {
+  color: #7e3156;
+}
+.spin {
+  animation: spin 900ms linear infinite;
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
 .topbar {
   display: flex;
   justify-content: space-between;
@@ -1082,5 +1197,15 @@ tbody tr:hover {
   }
   .chart-caption span:first-child {
     max-width: 100%;
+  }
+  .scenario-controls {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+  .scenario-toggle {
+    justify-self: start;
+  }
+  .scenario-run {
+    justify-content: center;
   }
 }

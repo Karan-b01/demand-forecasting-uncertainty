@@ -63,6 +63,13 @@ def forecast_at_quantile(df: pd.DataFrame, tau: float) -> np.ndarray:
     )
 
 
+def critical_ratio(c_u: float, c_o: float) -> float:
+    """Return the cost-minimizing Newsvendor demand quantile Cu / (Cu + Co)."""
+    if c_u <= 0 or c_o <= 0:
+        raise ValueError("underage and overage costs must both be positive")
+    return float(c_u / (c_u + c_o))
+
+
 def run_strategy_comparison(
     df: pd.DataFrame, c_u: float = 3.0, c_o: float = 1.0
 ) -> pd.DataFrame:
@@ -75,11 +82,10 @@ def run_strategy_comparison(
     # Strategy 2: Stocking at Median (q50)
     stock_median = df["pred_q50"].values
 
-    # Quantile Newsvendor Policy
-    # Critical ratio tau* = 3 / (3 + 1) = 0.75
-    # Linear interpolation between q50 and q90
-    # tau* is 62.5% of the distance from 0.50 to 0.90
-    stock_quantile_75 = forecast_at_quantile(df, 0.75)
+    # Quantile Newsvendor policy selected from the current shortage/leftover
+    # costs, interpolated across the trained quantile outputs.
+    tau_star = critical_ratio(c_u, c_o)
+    stock_critical_ratio = forecast_at_quantile(df, tau_star)
 
     # Conservative upper-band policy
     stock_q90 = df["pred_q90"].values
@@ -87,7 +93,7 @@ def run_strategy_comparison(
     strategies = {
         "1. Point Forecast (RMSE)": stock_point,
         "2. Median Forecast (q50)": stock_median,
-        "3. Optimal Quantile Policy (tau*=0.75)": stock_quantile_75,
+        f"3. Newsvendor Policy (tau*={tau_star:.3f})": stock_critical_ratio,
         "4. Conservative P90": stock_q90,
     }
 

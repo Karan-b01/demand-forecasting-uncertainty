@@ -34,6 +34,20 @@ const money = (n) =>
     maximumFractionDigits: 2,
   });
 const pct = (n) => `${(100 * (n || 0)).toFixed(1)}%`;
+function interpolateQuantile(quantiles, probability) {
+  const points = Object.entries(quantiles || {})
+    .map(([name, value]) => ({ level: Number(name.slice(1)) / 100, value }))
+    .filter((point) => Number.isFinite(point.level) && Number.isFinite(point.value))
+    .sort((left, right) => left.level - right.level);
+  if (!points.length) return 0;
+  if (probability <= points[0].level) return points[0].value;
+  if (probability >= points.at(-1).level) return points.at(-1).value;
+  const upperIndex = points.findIndex((point) => point.level >= probability);
+  const lower = points[upperIndex - 1];
+  const upper = points[upperIndex];
+  const weight = (probability - lower.level) / (upper.level - lower.level);
+  return lower.value + weight * (upper.value - lower.value);
+}
 
 function App() {
   const [options, setOptions] = useState(null),
@@ -49,6 +63,11 @@ function App() {
     [busy, setBusy] = useState(false),
     [error, setError] = useState(''),
     [replayCount, setReplayCount] = useState(null);
+  const [scenarioDate, setScenarioDate] = useState(''),
+    [priceAdjustment, setPriceAdjustment] = useState(0),
+    [simulateEvent, setSimulateEvent] = useState(false),
+    [simulatedData, setSimulatedData] = useState(null),
+    [simulationBusy, setSimulationBusy] = useState(false);
   async function get(url, opts) {
     const r = await fetch(url, opts);
     if (!r.ok) {
@@ -83,7 +102,11 @@ function App() {
   }, [store, item, under, over]);
   useEffect(() => {
     setReplayCount(null);
+    setSimulatedData(null);
   }, [store, item]);
+  useEffect(() => {
+    if (data?.series?.length) setScenarioDate(data.series.at(-1).date);
+  }, [data?.series]);
   useEffect(() => {
     if (replayCount === null || replayCount >= (data?.series?.length || 0)) return;
     const timer = setTimeout(() => setReplayCount((count) => count + 1), 420);
@@ -123,6 +146,31 @@ function App() {
       setError(e.message);
     } finally {
       setBusy(false);
+    }
+  }
+  async function runSimulation() {
+    if (!store || !item || !scenarioDate) return;
+    setSimulationBusy(true);
+    setError('');
+    try {
+      setSimulatedData(
+        await get(`${API}/v1/forecast/simulate`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            store_id: store,
+            item_id: item,
+            date: scenarioDate,
+            price_change_pct: Number(priceAdjustment),
+            is_holiday_override: simulateEvent,
+          }),
+        }),
+      );
+    } catch (e) {
+      setError(e.message);
+      setSimulatedData(null);
+    } finally {
+      setSimulationBusy(false);
     }
   }
   function readInventory(file) {
@@ -167,9 +215,39 @@ function App() {
   }
   const selected = data?.series || [];
   const chosen = selected.at(-1);
-  const chosenStock = Math.ceil(chosen?.stock || 0);
-  const chartSeries = replayCount === null ? selected : selected.slice(0, replayCount);
-  const replayCovered = chartSeries.filter(
+  const planningRow = selected.find((row) => row.date === scenarioDate) || chosen;
+  const simulationMatches =
+    simulatedData?.date === scenarioDate &&
+    simulatedData?.store_id === store &&
+    simulatedData?.item_id === item;
+  const targetService = under / (under + over);
+  const recommendedStock = simulationMatches
+    ? interpolateQuantile(simulatedData.simulated_quantiles, targetService)
+    : planningRow?.recommended_safety_stock ?? planningRow?.stock ?? 0;
+  const chosenStock = Math.ceil(recommendedStock);
+  const replaySeries =
+    replayCount === null ? selected : selected.slice(0, replayCount);
+  const chartSeries = simulationMatches ? selected : replaySeries;
+  const chartData = chartSeries.map((row) => ({
+    ...row,
+    simulated_forecast:
+      simulationMatches && simulatedData.date === row.date
+        ? simulatedData.simulated_forecast
+        : null,
+    simulated_p10:
+      simulationMatches && simulatedData.date === row.date
+        ? simulatedData.simulated_p10
+        : null,
+    simulated_p90:
+      simulationMatches && simulatedData.date === row.date
+        ? simulatedData.simulated_p90
+        : null,
+    simulated_stock:
+      simulationMatches && simulatedData.date === row.date
+        ? recommendedStock
+        : null,
+  }));
+  const replayCovered = replaySeries.filter(
     (row) => row.actual >= row.p10 && row.actual <= row.p90,
   ).length;
   const replayFinished = replayCount !== null && replayCount >= selected.length;
@@ -435,30 +513,43 @@ function App() {
                   <PackageCheck size={16} /> SUGGESTED STOCK
                 </span>
                 <div className="kpi-value">
-                  {chosenStock} <small>units</small>
+                  {simulationMatches
+                    ? recommendedStock.toFixed(1)
+                    : chosenStock}{' '}
+                  <small>units</small>
                 </div>
                 <div className="kpi-caption">
-                  For {item} at {store} on {chosen?.date}
+                  For {item} at {store} on {planningRow?.date}
                 </div>
                 <div className="kpi-foot">
-                  Rounded up to a whole unit for {pct(data.cost.target_service)} target
-                  service
+                  {simulationMatches
+                    ? `Rounds up to ${chosenStock} whole units at ${pct(targetService)} target service`
+                    : `Rounded up to a whole unit for ${pct(targetService)} target service`}
                 </div>
               </div>
               <div className="kpi">
                 <span className="kpi-title">TYPICAL DEMAND (P50)</span>
                 <div className="kpi-value">
-                  {chosen?.p50.toFixed(1)} <small>units</small>
+                  {(simulationMatches
+                    ? simulatedData.simulated_quantiles.p50
+                    : planningRow?.p50
+                  )?.toFixed(1)} <small>units</small>
                 </div>
-                <div className="kpi-caption">Middle estimate of daily sales</div>
+                <div className="kpi-caption">
+                  {simulationMatches
+                    ? 'Simulated median estimate'
+                    : 'Middle estimate of daily sales'}
+                </div>
               </div>
               <div className="kpi">
                 <span className="kpi-title">LIKELY DEMAND RANGE (P10–P90)</span>
                 <div className="kpi-value">
-                  {chosen?.p10.toFixed(1)}–{chosen?.p90.toFixed(1)} <small>units</small>
+                  {(simulationMatches ? simulatedData.simulated_p10 : planningRow?.p10)?.toFixed(1)}–{(simulationMatches ? simulatedData.simulated_p90 : planningRow?.p90)?.toFixed(1)} <small>units</small>
                 </div>
                 <div className="kpi-caption">
-                  80% prediction interval from the saved model
+                  {simulationMatches
+                    ? 'P10–P90 range from simulated inference'
+                    : '80% prediction interval from the saved model'}
                 </div>
               </div>
               <div className="kpi savings">
@@ -479,11 +570,82 @@ function App() {
               is{' '}
               <b>
                 τ* = Cᵤ / (Cᵤ + Cₒ) = {under} / ({under} + {over}) ={' '}
-                {pct(data.cost.target_service)}
+                {pct(targetService)}
               </b>
-              . At the assignment example of $3 missing-unit cost and $1 extra-unit
-              cost, 3/(3+1) = 75%, so the stock target is P75.
+              . This percentile is interpolated across the forecast quantiles to set
+              the stock target.
             </div>
+            <section className="panel scenario-panel">
+              <div className="panel-heading">
+                <div>
+                  <div className="eyebrow">LIVE MODEL INFERENCE</div>
+                  <h2>What-if scenario</h2>
+                  <p>
+                    Change price and event assumptions, then run the trained models
+                    against this date's historical feature row.
+                  </p>
+                </div>
+              </div>
+              <div className="scenario-controls">
+                <label>
+                  Scenario date
+                  <select
+                    value={scenarioDate}
+                    onChange={(event) => {
+                      setScenarioDate(event.target.value);
+                      setSimulatedData(null);
+                    }}
+                  >
+                    {selected.map((row) => (
+                      <option key={row.date} value={row.date}>
+                        {row.date}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="scenario-price">
+                  Price adjustment <b>{Number(priceAdjustment) > 0 ? '+' : ''}{priceAdjustment}%</b>
+                  <input
+                    type="range"
+                    min="-50"
+                    max="50"
+                    step="1"
+                    value={priceAdjustment}
+                    onChange={(event) => setPriceAdjustment(event.target.value)}
+                  />
+                  <span><small>-50%</small><small>+50%</small></span>
+                </label>
+                <button
+                  type="button"
+                  className={`scenario-toggle${simulateEvent ? ' active' : ''}`}
+                  aria-pressed={simulateEvent}
+                  onClick={() => setSimulateEvent((enabled) => !enabled)}
+                >
+                  <span className="toggle-track"><span /></span>
+                  Simulate promo / event
+                </button>
+                <button
+                  type="button"
+                  className="primary-button scenario-run"
+                  onClick={runSimulation}
+                  disabled={simulationBusy || !scenarioDate}
+                >
+                  <RefreshCw size={15} className={simulationBusy ? 'spin' : ''} />
+                  {simulationBusy ? 'Running…' : 'Run simulation'}
+                </button>
+              </div>
+              {simulatedData && (
+                <div className="scenario-result" role="status">
+                  Simulated demand for {simulatedData.date}:{' '}
+                  <b>{simulatedData.simulated_point.toFixed(1)} units</b>
+                  {' '}with P10–P90 range{' '}
+                  <b>{simulatedData.simulated_p10.toFixed(1)}–{simulatedData.simulated_p90.toFixed(1)}</b>.
+                  {' '}{simulatedData.prediction_changed || simulatedData.quantiles_changed
+                    ? 'Dashed scenario markers are overlaid on the chart, and the stock target uses these simulated quantiles.'
+                    : 'The model returned the same values at these settings; its tree splits were not crossed, so the stock target is unchanged.'}
+                </div>
+              )}
+            </section>
             <section className="panel chart-panel">
               <div className="panel-heading">
                 <div>
@@ -517,7 +679,7 @@ function App() {
               <div className="chart">
                 <ResponsiveContainer width="100%" height="100%">
                   <ComposedChart
-                    data={chartSeries}
+                    data={chartData}
                     margin={{ top: 18, right: 24, left: 4, bottom: 4 }}
                   >
                     <defs>
@@ -587,7 +749,7 @@ function App() {
                       name="P10 to P90 range"
                       stroke="none"
                       fill="url(#band)"
-                      connectNulls
+                      connectNulls={true}
                       legendType="rect"
                       isAnimationActive={false}
                     />
@@ -599,7 +761,7 @@ function App() {
                       strokeWidth={2}
                       dot={false}
                       activeDot={{ r: 5 }}
-                      connectNulls
+                      connectNulls={true}
                       isAnimationActive={false}
                     />
                     <Line
@@ -611,7 +773,7 @@ function App() {
                       strokeDasharray="7 4"
                       dot={{ r: 2.8, fill: '#2467d1', strokeWidth: 0 }}
                       activeDot={{ r: 5 }}
-                      connectNulls
+                      connectNulls={true}
                       isAnimationActive={false}
                     />
                     <Line
@@ -623,7 +785,7 @@ function App() {
                       strokeDasharray="3 3"
                       dot={false}
                       activeDot={{ r: 5 }}
-                      connectNulls
+                      connectNulls={true}
                       isAnimationActive={false}
                     />
                     <Line
@@ -638,6 +800,50 @@ function App() {
                       connectNulls
                       isAnimationActive
                       animationDuration={600}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="simulated_p10"
+                      name="Simulated P10"
+                      stroke="#bb6d24"
+                      strokeWidth={2}
+                      strokeDasharray="5 4"
+                      dot={{ r: 4 }}
+                      connectNulls={true}
+                      isAnimationActive={false}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="simulated_forecast"
+                      name="Simulated forecast"
+                      stroke="#bd4d82"
+                      strokeWidth={2.8}
+                      strokeDasharray="8 4"
+                      dot={{ r: 5 }}
+                      connectNulls={true}
+                      isAnimationActive={false}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="simulated_stock"
+                      name="Simulated recommended stock"
+                      stroke="#783d92"
+                      strokeWidth={2.3}
+                      strokeDasharray="2 4"
+                      dot={{ r: 4 }}
+                      connectNulls={true}
+                      isAnimationActive={false}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="simulated_p90"
+                      name="Simulated P90"
+                      stroke="#bb6d24"
+                      strokeWidth={2}
+                      strokeDasharray="5 4"
+                      dot={{ r: 4 }}
+                      connectNulls={true}
+                      isAnimationActive={false}
                     />
                     <Line
                       type="monotone"
